@@ -1,0 +1,360 @@
+
+# @title setup
+import os
+import sys
+import shutil
+import time
+import subprocess
+import threading
+import signal
+import re
+
+print("--- STEP 1: CLEANUP & INSTALL ---", flush=True)
+# Kill previous processes
+!pkill -f bore
+!pkill -f proxy_server.py
+!rm -rf /content/Manga-Colorizer
+
+# Clone Repo
+!git clone -b revamp https://github.com/BinitDOX/Manga-Colorizer.git
+os.chdir("/content/Manga-Colorizer/Backend")
+
+# Install Deps
+!pip install Flask-Cors einops torch torchvision requests opencv-python-headless > /dev/null
+
+!pip install curl_cffi > /dev/null
+print("Done.")
+
+print("--- STEP 2: DOWNLOAD MODELS ---", flush=True)
+# Create directories
+os.makedirs("networks", exist_ok=True)
+os.makedirs("denoising/models", exist_ok=True)
+
+# 1. Generator (Colorizer) - from GDrive as requested
+print("Downloading Generator...", flush=True)
+!gdown --id 1qmxUEKADkEM4iYLp1fpPLLKnfZ6tcF-t -O networks/generator.zip
+
+# 2. Extractor (Required for Colorizer)
+print("Downloading Extractor...", flush=True)
+!wget -q --show-progress -nc https://github.com/BinitDOX/Manga-Colorizer/releases/download/v2.0/extractor.pth -O networks/extractor.pth
+
+# 3. Upscaler (RealESRGAN)
+print("Downloading Upscaler...", flush=True)
+!wget -q --show-progress -nc https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus_anime_6B.pth -O networks/RealESRGAN_x4plus_anime_6B.pt
+
+# 4. Denoiser (FFDNet)
+print("Downloading Denoiser...", flush=True)
+!wget -q --show-progress -nc https://github.com/cszn/FFDNet/raw/master/models/net_rgb.pth -O denoising/models/net_rgb.pth
+
+# 5. Bore Tunnel
+if not os.path.exists("/content/bore"):
+    print("Downloading Bore...", flush=True)
+    !wget -q -nc https://github.com/ekzhang/bore/releases/download/v0.5.0/bore-v0.5.0-x86_64-unknown-linux-musl.tar.gz -O /content/bore.tar.gz
+    !tar -xzf /content/bore.tar.gz -C /content
+    !chmod +x /content/bore
+
+print("Setup Complete.")
+
+
+
+# @title Start Proxy (Max Performance - 6 Workers)
+import os
+import sys
+import shutil
+import time
+import subprocess
+import threading
+import queue
+import gc
+
+# --- STEP 1: CLEANUP ---
+!pkill -f proxy_server.py
+!pkill -f bore
+!pkill -f cloudflared
+!pkill -f ngrok
+!pkill -f ssh
+
+# --- STEP 2: SERVER CODE ---
+server_code = """
+import os
+import sys
+import logging
+import cv2
+import numpy as np
+import json
+import torch
+import PIL.Image
+import PIL.ImageEnhance
+import threading
+import queue
+import gc
+from flask import Flask, request, send_file, Response
+from io import BytesIO
+
+try:
+    from curl_cffi import requests as crequests
+except ImportError:
+    sys.exit(1)
+
+sys.path.append(os.getcwd())
+
+class ModelSettings:
+    pass
+
+from denoisator import MangaDenoiser
+from colorizator import MangaColorizator
+from upscalator import MangaUpscaler
+
+app = Flask(__name__)
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
+
+# --- CONFIGURATION ---
+class Config:
+    def __init__(self):
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.colorizer_path = 'networks/generator.zip'
+        self.extractor_path = 'networks/extractor.pth'
+        self.upscaler_path = 'networks/RealESRGAN_x4plus_anime_6B.pt'
+
+        self.colorizer_type = 'AlacGAN'
+        self.upscaler_type = 'ESRGAN'
+
+        # Tile size 0 means "Process whole image" (Faster, but uses more VRAM)
+        # Since we have 16GB VRAM and small models, we can afford this.
+        self.alacgan = ModelSettings()
+        self.alacgan.tile_size = 0
+        self.alacgan.tile_pad = 0
+        self.alacgan.image_size = 576
+
+        self.esrgan = ModelSettings()
+        self.esrgan.tile_size = 256
+        self.esrgan.tile_pad = 10
+
+        self.gigagan = ModelSettings()
+        self.gigagan.batch_size = 4
+        self.gigagan.use_overlap = False
+
+        self.cyclegan = ModelSettings()
+        self.cyclegan.tile_size = 0
+        self.cyclegan.tile_pad = 0
+        self.cyclegan.image_size = 512
+
+        self.denoise_sigma = 25
+        self.color_tolerance = 32
+        self.saturation_factor = 0.85
+        self.colorized_image_size = 576
+
+config = Config()
+
+# --- WORKER POOL SETUP (MAX PERFORMANCE) ---
+# Previous: 2 Workers (~2GB VRAM)
+# New: 6 Workers (~7-8GB VRAM) -> This uses half the GPU, leaving room for Upscaling spikes.
+NUM_WORKERS = 6
+model_queue = queue.Queue()
+
+try:
+    print(f"[-] Initializing {NUM_WORKERS} High-Speed Workers on {config.device}...", flush=True)
+
+    for i in range(NUM_WORKERS):
+        print(f"    ... Loading Worker {i+1}/{NUM_WORKERS}", flush=True)
+        # Create fresh instances
+        denoiser = MangaDenoiser(config)
+        colorizer = MangaColorizator(config)
+        upscaler = MangaUpscaler(config)
+
+        # Warmup (Optional: Runs a dummy black image through to allocate memory)
+        # dummy = np.zeros((100, 100, 3), dtype=np.uint8)
+        # denoiser.denoise(dummy, sigma=25)
+
+        model_queue.put({
+            'id': i+1,
+            'denoiser': denoiser,
+            'colorizer': colorizer,
+            'upscaler': upscaler
+        })
+
+    print(f"[+] {NUM_WORKERS} Workers Ready! System is running at Max Speed.", flush=True)
+
+except Exception as e:
+    print(f"[!] Critical Error Loading Models: {e}", flush=True)
+    sys.exit(1)
+
+def fast_color_check(pil_image, tolerance=32):
+    try:
+        thumb = pil_image.resize((128, 128), resample=PIL.Image.BILINEAR)
+        img_np = np.array(thumb)
+        img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+        hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+        s_channel = hsv[:, :, 1]
+        mean_sat = np.mean(s_channel)
+        high_sat_pixels = np.count_nonzero(s_channel > tolerance)
+        pixel_ratio = high_sat_pixels / s_channel.size
+        return (mean_sat > tolerance) or (pixel_ratio > 0.15), mean_sat
+    except:
+        return False, 0
+
+def adjust_saturation(img_np, factor):
+    if factor == 1.0: return img_np
+    pil_img = PIL.Image.fromarray(img_np)
+    enhancer = PIL.ImageEnhance.Color(pil_img)
+    pil_img = enhancer.enhance(factor)
+    return np.array(pil_img)
+
+@app.route('/', methods=['GET', 'POST'])
+def proxy():
+    target_url = request.args.get('url')
+    if not target_url: return f"Proxy Active ({NUM_WORKERS} Workers)", 200
+
+    if '127.0.0.1' in target_url or 'localhost' in target_url:
+        return "Localhost Skipped", 400
+
+    print(f"[*] Fetching: {target_url}", flush=True)
+
+    referer_candidates = [
+        'https://comick.live/', 'https://comick.io/', 'https://comick.app/', None
+    ]
+
+    base_headers = {
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    }
+
+    tachi_cookies = None
+    headers_str = request.args.get('headers')
+    if headers_str:
+        try:
+            tachi_headers = json.loads(headers_str)
+            if 'Cookie' in tachi_headers: tachi_cookies = tachi_headers['Cookie']
+        except: pass
+
+    r = None
+    success_download = False
+
+    for ref in referer_candidates:
+        current_headers = base_headers.copy()
+        if ref: current_headers['Referer'] = ref
+        if tachi_cookies: current_headers['Cookie'] = tachi_cookies
+
+        try:
+            r = crequests.get(target_url, headers=current_headers, impersonate="chrome124", timeout=15, allow_redirects=True)
+            if r.status_code == 200:
+                success_download = True
+                break
+            elif r.status_code == 403: continue
+            else: break
+        except: break
+
+    if not success_download or r is None:
+        if r: return Response(r.content, status=r.status_code)
+        return "Download Failed", 500
+
+    try:
+        image_bytes = BytesIO(r.content)
+        try:
+            pil_img = PIL.Image.open(image_bytes).convert("RGB")
+        except:
+            return Response(r.content, status=200)
+
+        is_colored, score = fast_color_check(pil_img, config.color_tolerance)
+        if is_colored:
+            print(f"    -> [SKIP] Already colored (Sat: {score:.1f})", flush=True)
+            image_bytes.seek(0)
+            return send_file(image_bytes, mimetype='image/jpeg')
+
+        # --- HIGH SPEED PARALLEL PROCESSING ---
+        worker = model_queue.get()
+        try:
+            # print(f"    -> Assigned to Worker {worker['id']}", flush=True)
+            img_np = np.array(pil_img)
+
+            img_np = worker['denoiser'].denoise(img_np, sigma=config.denoise_sigma)
+            worker['colorizer'].set_image((img_np.astype('float32') / 255), config.colorized_image_size)
+            img_np = worker['colorizer'].colorize()
+            img_np = worker['upscaler'].upscale((img_np.astype('float32') / 255), 4)
+
+            # Manual Garbage Collection helps when running 6+ workers to prevent fragmentation
+            # torch.cuda.empty_cache() # Uncomment if you hit OOM, but slows it down slightly
+
+        finally:
+            model_queue.task_done()
+            model_queue.put(worker)
+        # --------------------------------------
+
+        img_np = adjust_saturation(img_np, config.saturation_factor)
+
+        img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+        success, encoded_img = cv2.imencode('.webp', img_bgr, [int(cv2.IMWRITE_WEBP_QUALITY), 85])
+
+        if success:
+            return send_file(BytesIO(encoded_img.tobytes()), mimetype='image/webp')
+        else:
+            return Response(r.content, status=200)
+
+    except Exception as e:
+        print(f"[!] Processing Error: {e}", flush=True)
+        return Response(r.content, status=200)
+
+if __name__ == '__main__':
+    print("READY_TO_SERVE", flush=True)
+    app.run(host='0.0.0.0', port=5000, threaded=True)
+"""
+
+with open("proxy_server.py", "w") as f:
+    f.write(server_code)
+
+print("--- STARTING FLASK ---", flush=True)
+flask_process = subprocess.Popen(
+    ["python", "-u", "proxy_server.py"],
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    universal_newlines=True,
+    cwd="/content/Manga-Colorizer/Backend"
+)
+
+flask_ready = False
+def monitor_flask():
+    global flask_ready
+    while True:
+        line = flask_process.stdout.readline()
+        if not line: break
+        line = line.strip()
+        print(f"[FLASK] {line}")
+        if "READY_TO_SERVE" in line:
+            flask_ready = True
+
+t = threading.Thread(target=monitor_flask, daemon=True)
+t.start()
+
+# Wait for Models (Takes a bit longer to load 6 copies)
+wait_count = 0
+while not flask_ready:
+    time.sleep(1)
+    wait_count += 1
+    if wait_count > 300: break
+
+if flask_ready:
+    print("\n--- STARTING LOCALHOST.RUN TUNNEL ---", flush=True)
+    tunnel_cmd = "ssh -o StrictHostKeyChecking=no -R 80:localhost:5000 nokey@localhost.run"
+
+    tunnel_process = subprocess.Popen(
+        tunnel_cmd.split(),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        universal_newlines=True
+    )
+
+    try:
+        found_url = False
+        for line in iter(tunnel_process.stdout.readline, ''):
+            line = line.strip()
+            if "tunneled with tls change to" in line or ".lhr.life" in line or ".localhost.run" in line:
+                url = line.split()[-1]
+                print(f"\n=======================================================")
+                print(f"✅ COPY THIS URL INTO TACHIYOMI:")
+                print(f"{url}")
+                print(f"=======================================================\n")
+                found_url = True
+    except KeyboardInterrupt:
+        tunnel_process.terminate()
+        flask_process.terminate()

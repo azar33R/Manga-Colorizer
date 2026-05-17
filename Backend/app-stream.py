@@ -9,6 +9,7 @@ import urllib.request
 import os
 import gc
 
+import cv2
 import PIL.Image
 import numpy as np
 from flask import Flask, request, jsonify, abort
@@ -19,6 +20,7 @@ from colorizator import MangaColorizator
 from upscalator import MangaUpscaler
 from utils.utils import distance_from_grayscale, generate_random_id, \
     image_to_base64, load_image_as_base64, save_image, sanitize_string, clear_torch_cache
+from utils.post_process import apply_post_processing
 
 
 app = Flask(__name__)
@@ -115,7 +117,24 @@ def colorize_image_data():
                 print(f'[+] [{rid}] Image already colored: {coloredness}')
                 return jsonify({'msg': f'Image: {img_name}, Already colored: {coloredness} > 1'})
 
-        if denoise:
+        # Smart conditional: skip denoise if image is already clean
+        actual_denoise = denoise
+        if denoise and config.skip_clean_denoise:
+            gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY) if len(image.shape) == 3 else image
+            noise_estimate = np.std(gray - cv2.GaussianBlur(gray, (5, 5), 0))
+            if noise_estimate < config.clean_threshold:
+                print(f'[+] [{rid}] Skipping denoise: image is clean (noise={noise_estimate:.2f})')
+                actual_denoise = False
+
+        # Smart conditional: skip upscale if image is already high-res
+        actual_upscale = upscale
+        if upscale and config.skip_highres_upscale:
+            max_dim = max(image.shape[0], image.shape[1])
+            if max_dim >= config.highres_threshold:
+                print(f'[+] [{rid}] Skipping upscale: image is already high-res ({max_dim}px)')
+                actual_upscale = False
+
+        if actual_denoise:
             print(f'[*] [{rid}] Denoising image...')
             image = denoise_image(rid, image, denoiser, denoise_sigma)
 
@@ -123,9 +142,20 @@ def colorize_image_data():
             print(f'[*] [{rid}] Colorizing image...')
             image = colorize_image(rid, image, colorizer)
 
-        if upscale:
+        if actual_upscale:
             print(f'[*] [{rid}] Upscaling image...')
             image = upscale_image(rid, image, upscaler, upscale_factor)
+
+        # Post-processing: sharpening + adaptive saturation
+        if config.post_process:
+            print(f'[*] [{rid}] Applying post-processing...')
+            image = apply_post_processing(
+                image,
+                sharpen=True,
+                sharpen_amount=config.sharpen_amount,
+                adjust_saturation=True,
+                sat_target=config.saturation_target
+            )
 
         if cache:
             try:
@@ -276,6 +306,15 @@ if __name__ == '__main__':
 
     parser.add_argument('--upscale_factor', choices=[2, 4], default=4, type=int, help='Upscale by x2 or x4')
     parser.add_argument('--denoise_sigma', default=25, type=int, help='How much noise to expect from the image')
+    parser.add_argument('--preserve-text', dest='preserve_text', action='store_true', default=False, help='Enable CRAFT text preservation')
+    parser.add_argument('--post-process', dest='post_process', action='store_true', default=False, help='Enable sharpening + adaptive saturation')
+    parser.add_argument('--sharpen-amount', default=0.4, type=float, help='Sharpening intensity (0.0-1.0)')
+    parser.add_argument('--saturation-target', default=100, type=int, help='Target saturation mean for adaptive adjustment')
+    parser.add_argument('--cache-root', default='output/cache', help='Root directory for cached images')
+    parser.add_argument('--skip-clean-denoise', dest='skip_clean_denoise', action='store_true', default=False, help='Skip denoising if image is already clean')
+    parser.add_argument('--skip-highres-upscale', dest='skip_highres_upscale', action='store_true', default=False, help='Skip upscaling if image is already high-res')
+    parser.add_argument('--highres-threshold', default=2000, type=int, help='Max dimension threshold to skip upscaling')
+    parser.add_argument('--clean-threshold', default=5.0, type=float, help='MSE threshold to consider image clean')
 
     config = parser.parse_args()
 

@@ -5,6 +5,8 @@ from torchvision.transforms import ToTensor
 from networks.alac_gan import Colorizer as AlacGANGenerator
 from networks.cycle_gan import CycleGANGenerator
 from utils.utils import resize_pad, tile_process
+from text_detection.craft import CraftTextDetector
+from text_detection.text_mask import create_text_preservation_pipeline
 
 
 class ColorizationStrategy:
@@ -123,6 +125,7 @@ class MangaColorizator:
 
         self.config = config
         self.current_image = None
+        self.current_image_orig = None
         self.current_size = 576
 
         if config.colorizer_type == 'CycleGAN':
@@ -132,12 +135,33 @@ class MangaColorizator:
         else:
             raise Exception('Invalid colorizer type')
 
+        self.text_detector = None
+        if hasattr(config, 'preserve_text') and config.preserve_text:
+            try:
+                self.text_detector = CraftTextDetector(config.device)
+                print("[+] CRAFT Text Detector initialized")
+            except Exception as e:
+                print(f"[-] Failed to initialize CRAFT: {e}")
+
     def set_image(self, image, size=0):
         self.current_image = image
+        self.current_image_orig = (image * 255.0).clip(0, 255).astype(np.uint8)
         self.current_size = size
 
     def colorize(self):
         if self.current_image is None:
             raise RuntimeError("Image not set. Call set_image() first.")
 
-        return self.strategy.process_image(self.current_image, self.current_size)
+        colorized = self.strategy.process_image(self.current_image, self.current_size)
+
+        if self.text_detector is not None and self.current_image_orig is not None:
+            colorized, _ = create_text_preservation_pipeline(
+                self.current_image_orig,
+                colorized,
+                self.text_detector,
+                dilate_kernel=3,
+                dilate_iters=2,
+                blur_kernel=5
+            )
+
+        return colorized

@@ -1,6 +1,6 @@
 import torch
 
-from denoising.denoiser import FFDNetDenoiser
+from denoising.nafnet_denoiser import NAFNetDenoiser
 
 
 class MangaDenoiser:
@@ -11,7 +11,7 @@ class MangaDenoiser:
         else:
             self.device = config.device
 
-        self.model = FFDNetDenoiser(self.device)
+        self.model = NAFNetDenoiser(self.device)
 
 
     def denoise(self, image, sigma=25):
