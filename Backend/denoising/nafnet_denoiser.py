@@ -158,7 +158,7 @@ class NAFNetDenoiser:
         self.device = device
         self.weights_dir = weights_dir
         self.weights_path = os.path.join(weights_dir, 'nafnet-sidd-width32.pth')
-        self.model = NAFNet(img_channel=3, width=32, middle_blk_num=1, enc_blk_nums=[1, 1, 1, 28], dec_blk_nums=[1, 1, 1, 1])
+        self.model = NAFNet(img_channel=3, width=32, middle_blk_num=1, enc_blk_nums=[2, 2, 3, 8], dec_blk_nums=[2, 2, 2, 2])
         self.load_weights()
         self.model.eval()
 
