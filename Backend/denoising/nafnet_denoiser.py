@@ -4,7 +4,12 @@ import cv2
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from urllib.request import urlretrieve
+
+try:
+    import gdown
+except ImportError:
+    print("[-] gdown not installed. Install it with: pip install gdown")
+    gdown = None
 
 
 class LayerNormFunction(torch.autograd.Function):
@@ -157,10 +162,12 @@ class NAFNetDenoiser:
 
     def load_weights(self):
         if not os.path.exists(self.weights_path):
+            if gdown is None:
+                raise ImportError("gdown is required to download NAFNet weights. Please install it with: pip install gdown")
             os.makedirs(self.weights_dir, exist_ok=True)
-            print(f"[+] Downloading pretrained NAFNet denoiser weights...")
-            url = 'https://github.com/megvii-research/NAFNet/releases/download/v0.0.1/NAFNet-SIDD-width32.pth'
-            urlretrieve(url, self.weights_path)
+            print(f"[+] Downloading pretrained NAFNet denoiser weights from Google Drive...")
+            gdrive_url = 'https://drive.google.com/uc?id=1lsByk21Xw-6aW7epCwOQxvm6HYCQZPHZ'
+            gdown.download(gdrive_url, self.weights_path, quiet=False)
             print(f"[+] NAFNet weights downloaded to {self.weights_path}")
         
         state_dict = torch.load(self.weights_path, map_location='cpu')
