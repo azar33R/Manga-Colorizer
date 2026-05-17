@@ -48,12 +48,14 @@ class LayerNormFunction(torch.autograd.Function):
 class LayerNorm2d(nn.Module):
     def __init__(self, channels, eps=1e-6):
         super(LayerNorm2d, self).__init__()
-        self.register_parameter('weight', nn.Parameter(torch.ones(1, channels, 1, 1)))
-        self.register_parameter('bias', nn.Parameter(torch.zeros(1, channels, 1, 1)))
+        self.register_parameter('weight', nn.Parameter(torch.ones(channels)))
+        self.register_parameter('bias', nn.Parameter(torch.zeros(channels)))
         self.eps = eps
 
     def forward(self, x):
-        return LayerNormFunction.apply(x, self.weight, self.bias, self.eps)
+        w = self.weight.view(1, -1, 1, 1)
+        b = self.bias.view(1, -1, 1, 1)
+        return LayerNormFunction.apply(x, w, b, self.eps)
 
 
 class SimpleGate(nn.Module):
