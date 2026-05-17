@@ -4,7 +4,12 @@ import cv2
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from urllib.request import urlretrieve
+
+try:
+    import gdown
+except ImportError:
+    print("[-] gdown not installed. Install it with: pip install gdown")
+    gdown = None
 
 
 class CRAFT(nn.Module):
@@ -73,10 +78,12 @@ class CRAFT(nn.Module):
         weights_dir = 'text_detection/models'
         weights_path = os.path.join(weights_dir, 'craft_mlt_25k.pth')
         if not os.path.exists(weights_path):
+            if gdown is None:
+                raise ImportError("gdown is required to download CRAFT weights. Please install it with: pip install gdown")
             os.makedirs(weights_dir, exist_ok=True)
-            print("[+] Downloading pretrained CRAFT weights...")
-            url = 'https://github.com/clovaai/CRAFT-pytorch/raw/master/craft_mlt_25k.pth'
-            urlretrieve(url, weights_path)
+            print("[+] Downloading pretrained CRAFT weights from Google Drive...")
+            gdrive_url = 'https://drive.google.com/uc?id=1Jk4eGD7crsqCCu9C9VepPZaq_XEnvsLn'
+            gdown.download(gdrive_url, weights_path, quiet=False)
             print(f"[+] CRAFT weights downloaded to {weights_path}")
 
         state_dict = torch.load(weights_path, map_location='cpu')
