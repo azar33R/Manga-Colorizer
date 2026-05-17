@@ -15,12 +15,12 @@ print("--- STEP 1: CLEANUP & INSTALL ---", flush=True)
 !pkill -f proxy_server.py
 !rm -rf /content/Manga-Colorizer
 
-# Clone Repo
-!git clone -b revamp https://github.com/BinitDOX/Manga-Colorizer.git
+# Clone Repo (Updated to your fork with new features)
+!git clone -b revamp https://github.com/azar33R/Manga-Colorizer.git
 os.chdir("/content/Manga-Colorizer/Backend")
 
-# Install Deps
-!pip install Flask-Cors einops torch torchvision requests opencv-python-headless > /dev/null
+# Install Deps (Added scikit-image for SSIM safety checks)
+!pip install Flask-Cors einops torch torchvision requests opencv-python-headless scikit-image > /dev/null
 
 !pip install curl_cffi > /dev/null
 print("Done.")
@@ -42,9 +42,8 @@ print("Downloading Extractor...", flush=True)
 print("Downloading Upscaler...", flush=True)
 !wget -q --show-progress -nc https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus_anime_6B.pth -O networks/RealESRGAN_x4plus_anime_6B.pt
 
-# 4. Denoiser (FFDNet)
-print("Downloading Denoiser...", flush=True)
-!wget -q --show-progress -nc https://github.com/cszn/FFDNet/raw/master/models/net_rgb.pth -O denoising/models/net_rgb.pth
+# 4. Denoiser (NAFNet weights will auto-download on first run)
+print("Denoiser: NAFNet weights will auto-download on startup.", flush=True)
 
 # 5. Bore Tunnel
 if not os.path.exists("/content/bore"):
@@ -57,7 +56,7 @@ print("Setup Complete.")
 
 
 
-# @title Start Proxy (Max Performance - 6 Workers)
+# @title Start Proxy (Dynamic Workers + New Features)
 import os
 import sys
 import shutil
@@ -104,6 +103,11 @@ class ModelSettings:
 from denoisator import MangaDenoiser
 from colorizator import MangaColorizator
 from upscalator import MangaUpscaler
+from utils.vram_scaling import calculate_optimal_workers
+from utils.fallback_safety import detect_artifacts
+from utils.post_process import apply_post_processing
+from text_detection.craft import CraftTextDetector
+from text_detection.text_mask import create_text_preservation_pipeline
 
 app = Flask(__name__)
 log = logging.getLogger('werkzeug')
@@ -120,8 +124,7 @@ class Config:
         self.colorizer_type = 'AlacGAN'
         self.upscaler_type = 'ESRGAN'
 
-        # Tile size 0 means "Process whole image" (Faster, but uses more VRAM)
-        # Since we have 16GB VRAM and small models, we can afford this.
+        # Tile size 0 means "Process whole image"
         self.alacgan = ModelSettings()
         self.alacgan.tile_size = 0
         self.alacgan.tile_pad = 0
@@ -144,34 +147,43 @@ class Config:
         self.color_tolerance = 32
         self.saturation_factor = 0.85
         self.colorized_image_size = 576
+        
+        # --- NEW FEATURES ---
+        self.preserve_text = True
+        self.post_process = True
+        self.ssim_safety = True
+        self.ssim_threshold = 0.3
+        self.sharpen_amount = 0.4
+        self.saturation_target = 100
 
 config = Config()
 
-# --- WORKER POOL SETUP (MAX PERFORMANCE) ---
-# Previous: 2 Workers (~2GB VRAM)
-# New: 6 Workers (~7-8GB VRAM) -> This uses half the GPU, leaving room for Upscaling spikes.
-NUM_WORKERS = 6
+# --- DYNAMIC WORKER POOL ---
+NUM_WORKERS = calculate_optimal_workers(vram_per_worker_gb=1.5, safety_margin_gb=2.0)
 model_queue = queue.Queue()
 
 try:
-    print(f"[-] Initializing {NUM_WORKERS} High-Speed Workers on {config.device}...", flush=True)
+    print(f"[-] Initializing {NUM_WORKERS} Dynamic Workers on {config.device}...", flush=True)
 
     for i in range(NUM_WORKERS):
         print(f"    ... Loading Worker {i+1}/{NUM_WORKERS}", flush=True)
-        # Create fresh instances
         denoiser = MangaDenoiser(config)
         colorizer = MangaColorizator(config)
         upscaler = MangaUpscaler(config)
-
-        # Warmup (Optional: Runs a dummy black image through to allocate memory)
-        # dummy = np.zeros((100, 100, 3), dtype=np.uint8)
-        # denoiser.denoise(dummy, sigma=25)
+        
+        text_detector = None
+        if config.preserve_text:
+            try:
+                text_detector = CraftTextDetector(config.device)
+            except Exception as e:
+                print(f"    [!] CRAFT init failed: {e}")
 
         model_queue.put({
             'id': i+1,
             'denoiser': denoiser,
             'colorizer': colorizer,
-            'upscaler': upscaler
+            'upscaler': upscaler,
+            'text_detector': text_detector
         })
 
     print(f"[+] {NUM_WORKERS} Workers Ready! System is running at Max Speed.", flush=True)
@@ -193,13 +205,6 @@ def fast_color_check(pil_image, tolerance=32):
         return (mean_sat > tolerance) or (pixel_ratio > 0.15), mean_sat
     except:
         return False, 0
-
-def adjust_saturation(img_np, factor):
-    if factor == 1.0: return img_np
-    pil_img = PIL.Image.fromarray(img_np)
-    enhancer = PIL.ImageEnhance.Color(pil_img)
-    pil_img = enhancer.enhance(factor)
-    return np.array(pil_img)
 
 @app.route('/', methods=['GET', 'POST'])
 def proxy():
@@ -262,26 +267,52 @@ def proxy():
             image_bytes.seek(0)
             return send_file(image_bytes, mimetype='image/jpeg')
 
-        # --- HIGH SPEED PARALLEL PROCESSING ---
+        # --- ENHANCED PROCESSING PIPELINE ---
         worker = model_queue.get()
         try:
-            # print(f"    -> Assigned to Worker {worker['id']}", flush=True)
             img_np = np.array(pil_img)
+            orig_img_np = img_np.copy()
 
+            # 1. Denoise (NAFNet)
             img_np = worker['denoiser'].denoise(img_np, sigma=config.denoise_sigma)
+            
+            # 2. Colorize
             worker['colorizer'].set_image((img_np.astype('float32') / 255), config.colorized_image_size)
-            img_np = worker['colorizer'].colorize()
-            img_np = worker['upscaler'].upscale((img_np.astype('float32') / 255), 4)
+            colorized = worker['colorizer'].colorize()
+            
+            # 3. SSIM Safety Check
+            if config.ssim_safety:
+                has_artifacts, ssim_score = detect_artifacts(img_np, colorized, config.ssim_threshold)
+                if has_artifacts:
+                    print(f"    -> [SAFETY] Artifacts detected (SSIM: {ssim_score:.2f}), returning original", flush=True)
+                    image_bytes.seek(0)
+                    return send_file(image_bytes, mimetype='image/jpeg')
+                img_np = colorized
+            else:
+                img_np = colorized
 
-            # Manual Garbage Collection helps when running 6+ workers to prevent fragmentation
-            # torch.cuda.empty_cache() # Uncomment if you hit OOM, but slows it down slightly
+            # 4. Upscale
+            img_np = worker['upscaler'].upscale((img_np.astype('float32') / 255), 4)
+            
+            # 5. Text Preservation (Composite after upscale for quality)
+            if config.preserve_text and worker['text_detector'] is not None:
+                upscaled_orig = worker['upscaler'].upscale((orig_img_np.astype('float32') / 255), 4)
+                img_np, _ = create_text_preservation_pipeline(upscaled_orig, img_np, worker['text_detector'])
+
+            # 6. Post-Processing (Sharpen + Adaptive Saturation)
+            if config.post_process:
+                img_np = apply_post_processing(
+                    img_np, 
+                    sharpen=True, 
+                    sharpen_amount=config.sharpen_amount,
+                    adjust_saturation=True, 
+                    sat_target=config.saturation_target
+                )
 
         finally:
             model_queue.task_done()
             model_queue.put(worker)
         # --------------------------------------
-
-        img_np = adjust_saturation(img_np, config.saturation_factor)
 
         img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
         success, encoded_img = cv2.imencode('.webp', img_bgr, [int(cv2.IMWRITE_WEBP_QUALITY), 85])
@@ -326,7 +357,7 @@ def monitor_flask():
 t = threading.Thread(target=monitor_flask, daemon=True)
 t.start()
 
-# Wait for Models (Takes a bit longer to load 6 copies)
+# Wait for Models
 wait_count = 0
 while not flask_ready:
     time.sleep(1)
