@@ -4,7 +4,7 @@ import cv2
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from urllib.request import urlretrieve
+import requests
 
 
 class CRAFT(nn.Module):
@@ -77,24 +77,32 @@ class CRAFT(nn.Module):
             print("[+] Downloading pretrained CRAFT weights...")
             urls = [
                 'https://github.com/clovaai/CRAFT-pytorch/raw/master/craft_mlt_25k.pth',
-                'https://huggingface.co/spaces/akhaliq/CRAFT/resolve/main/craft_mlt_25k.pth'
+                'https://huggingface.co/spaces/akhaliq/CRAFT/resolve/main/craft_mlt_25k.pth',
+                'https://github.com/BinitDOX/Manga-Colorizer/releases/download/v2.0/craft_mlt_25k.pth'
             ]
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
             success = False
             for url in urls:
                 try:
-                    urlretrieve(url, weights_path)
-                    success = True
-                    break
-                except Exception:
+                    print(f"    Trying: {url}")
+                    r = requests.get(url, headers=headers, timeout=30, stream=True)
+                    if r.status_code == 200:
+                        with open(weights_path, 'wb') as f:
+                            for chunk in r.iter_content(chunk_size=8192):
+                                f.write(chunk)
+                        success = True
+                        break
+                except Exception as e:
+                    print(f"    Failed: {e}")
                     continue
             if not success:
-                raise FileNotFoundError(
-                    f"CRAFT weights not found at {weights_path}. "
-                    "Download manually from https://drive.google.com/uc?id=1Jk4eGD7crsqCCu9C9VepPZaq_XEnvsLn "
-                    "and place in text_detection/models/"
-                )
+                print(f"[!] CRAFT download failed. Text preservation will be disabled.")
+                print(f"    Manual fix: download craft_mlt_25k.pth to {weights_path}")
+                return False
             print(f"[+] CRAFT weights downloaded to {weights_path}")
 
+        if not os.path.exists(weights_path):
+            return False
         state_dict = torch.load(weights_path, map_location='cpu')
         if 'state_dict' in state_dict:
             state_dict = state_dict['state_dict']
@@ -104,6 +112,7 @@ class CRAFT(nn.Module):
             new_state_dict[new_k] = v
         self.load_state_dict(new_state_dict, strict=False)
         print(f"[+] Loaded CRAFT weights")
+        return True
 
     def forward(self, x):
         # Encoder

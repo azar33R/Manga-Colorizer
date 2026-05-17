@@ -1,0 +1,120 @@
+ --- STARTING FLASK ---
+[FLASK] [+] VRAM Analysis: Total=14.6GB, Free=14.6GB
+[FLASK] [+] Calculated Workers: 8 (using 1.5GB/worker + 2.0GB margin)
+[FLASK] [-] Initializing 8 Dynamic Workers on cuda...
+[FLASK] ... Loading Worker 1/8
+[FLASK] [+] Downloading pretrained NAFNet denoiser weights from Google Drive...
+[FLASK] Downloading...
+[FLASK] From (original): https://drive.google.com/uc?id=1lsByk21Xw-6aW7epCwOQxvm6HYCQZPHZ
+[FLASK] From (redirected): https://drive.google.com/uc?id=1lsByk21Xw-6aW7epCwOQxvm6HYCQZPHZ&confirm=t&uuid=9f16ae36-162f-4ffd-a409-ee147abe02c6
+[FLASK] To: /content/Manga-Colorizer/Backend/denoising/models/nafnet-sidd-width32.pth
+[FLASK] 
+[FLASK] 0%|          | 0.00/117M [00:00<?, ?B/s]
+[FLASK] 2%|▏         | 2.10M/117M [00:00<00:05, 19.6MB/s]
+[FLASK] 13%|█▎        | 15.7M/117M [00:00<00:01, 85.4MB/s]
+[FLASK] 21%|██        | 24.6M/117M [00:00<00:01, 85.2MB/s]
+[FLASK] 32%|███▏      | 37.2M/117M [00:00<00:00, 99.6MB/s]
+[FLASK] 42%|████▏     | 49.3M/117M [00:00<00:00, 106MB/s]
+[FLASK] 52%|█████▏    | 61.3M/117M [00:00<00:00, 111MB/s]
+[FLASK] 63%|██████▎   | 73.9M/117M [00:00<00:00, 115MB/s]
+[FLASK] 73%|███████▎  | 85.5M/117M [00:00<00:00, 112MB/s]
+[FLASK] 87%|████████▋ | 101M/117M [00:00<00:00, 126MB/s]
+[FLASK] 100%|██████████| 117M/117M [00:01<00:00, 114MB/s]
+[FLASK] [+] NAFNet weights downloaded to denoising/models/nafnet-sidd-width32.pth
+[FLASK] [+] Loaded NAFNet denoiser weights from denoising/models/nafnet-sidd-width32.pth
+[FLASK] [+] Loaded AlacGAN weights from networks/generator.zip
+[FLASK] [+] Downloading pretrained CRAFT weights...
+[FLASK] [-] Failed to initialize CRAFT: CRAFT weights not found at text_detection/models/craft_mlt_25k.pth. Download manually from https://drive.google.com/uc?id=1Jk4eGD7crsqCCu9C9VepPZaq_XEnvsLn and place in text_detection/models/
+[FLASK] /usr/local/lib/python3.12/dist-packages/torch/serialization.py:1749: SourceChangeWarning: source code of class 'torch.nn.modules.conv.Conv2d' has changed. you can retrieve the original source code by accessing the object's source attribute or set `torch.nn.Module.dump_patches = True` and use the patch tool to revert the changes.
+[FLASK] _check_container_source(*data)
+[FLASK] /usr/local/lib/python3.12/dist-packages/torch/serialization.py:1749: SourceChangeWarning: source code of class 'torch.nn.modules.container.Sequential' has changed. you can retrieve the original source code by accessing the object's source attribute or set `torch.nn.Module.dump_patches = True` and use the patch tool to revert the changes.
+[FLASK] _check_container_source(*data)
+[FLASK] /usr/local/lib/python3.12/dist-packages/torch/serialization.py:1749: SourceChangeWarning: source code of class 'torch.nn.modules.activation.LeakyReLU' has changed. you can retrieve the original source code by accessing the object's source attribute or set `torch.nn.Module.dump_patches = True` and use the patch tool to revert the changes.
+[FLASK] _check_container_source(*data)
+[FLASK] [+] Loaded ESRGAN weights  from networks/RealESRGAN_x4plus_anime_6B.pt
+[FLASK] [+] Downloading pretrained CRAFT weights...
+[FLASK] [!] CRAFT init failed: CRAFT weights not found at text_detection/models/craft_mlt_25k.pth. Download manually from https://drive.google.com/uc?id=1Jk4eGD7crsqCCu9C9VepPZaq_XEnvsLn and place in text_detection/models/
+[FLASK] ... Loading Worker 2/8
+[FLASK] [+] Loaded NAFNet denoiser weights from denoising/models/nafnet-sidd-width32.pth
+[FLASK] [+] Loaded AlacGAN weights from networks/generator.zip
+[FLASK] [+] Downloading pretrained CRAFT weights...
+[FLASK] [-] Failed to initialize CRAFT: CRAFT weights not found at text_detection/models/craft_mlt_25k.pth. Download manually from https://drive.google.com/uc?id=1Jk4eGD7crsqCCu9C9VepPZaq_XEnvsLn and place in text_detection/models/
+[FLASK] [+] Loaded ESRGAN weights  from networks/RealESRGAN_x4plus_anime_6B.pt
+[FLASK] [+] Downloading pretrained CRAFT weights...
+[FLASK] [!] CRAFT init failed: CRAFT weights not found at text_detection/models/craft_mlt_25k.pth. Download manually from https://drive.google.com/uc?id=1Jk4eGD7crsqCCu9C9VepPZaq_XEnvsLn and place in text_detection/models/
+[FLASK] ... Loading Worker 3/8
+[FLASK] [+] Loaded NAFNet denoiser weights from denoising/models/nafnet-sidd-width32.pth
+[FLASK] [+] Loaded AlacGAN weights from networks/generator.zip
+[FLASK] [+] Downloading pretrained CRAFT weights...
+[FLASK] [-] Failed to initialize CRAFT: CRAFT weights not found at text_detection/models/craft_mlt_25k.pth. Download manually from https://drive.google.com/uc?id=1Jk4eGD7crsqCCu9C9VepPZaq_XEnvsLn and place in text_detection/models/
+[FLASK] [+] Loaded ESRGAN weights  from networks/RealESRGAN_x4plus_anime_6B.pt
+[FLASK] [+] Downloading pretrained CRAFT weights...
+[FLASK] [!] CRAFT init failed: CRAFT weights not found at text_detection/models/craft_mlt_25k.pth. Download manually from https://drive.google.com/uc?id=1Jk4eGD7crsqCCu9C9VepPZaq_XEnvsLn and place in text_detection/models/
+[FLASK] ... Loading Worker 4/8
+[FLASK] [+] Loaded NAFNet denoiser weights from denoising/models/nafnet-sidd-width32.pth
+[FLASK] [+] Loaded AlacGAN weights from networks/generator.zip
+[FLASK] [+] Downloading pretrained CRAFT weights...
+[FLASK] [-] Failed to initialize CRAFT: CRAFT weights not found at text_detection/models/craft_mlt_25k.pth. Download manually from https://drive.google.com/uc?id=1Jk4eGD7crsqCCu9C9VepPZaq_XEnvsLn and place in text_detection/models/
+[FLASK] [+] Loaded ESRGAN weights  from networks/RealESRGAN_x4plus_anime_6B.pt
+[FLASK] [+] Downloading pretrained CRAFT weights...
+[FLASK] [!] CRAFT init failed: CRAFT weights not found at text_detection/models/craft_mlt_25k.pth. Download manually from https://drive.google.com/uc?id=1Jk4eGD7crsqCCu9C9VepPZaq_XEnvsLn and place in text_detection/models/
+[FLASK] ... Loading Worker 5/8
+[FLASK] [+] Loaded NAFNet denoiser weights from denoising/models/nafnet-sidd-width32.pth
+[FLASK] [+] Loaded AlacGAN weights from networks/generator.zip
+[FLASK] [+] Downloading pretrained CRAFT weights...
+[FLASK] [-] Failed to initialize CRAFT: CRAFT weights not found at text_detection/models/craft_mlt_25k.pth. Download manually from https://drive.google.com/uc?id=1Jk4eGD7crsqCCu9C9VepPZaq_XEnvsLn and place in text_detection/models/
+[FLASK] [+] Loaded ESRGAN weights  from networks/RealESRGAN_x4plus_anime_6B.pt
+[FLASK] [+] Downloading pretrained CRAFT weights...
+[FLASK] [!] CRAFT init failed: CRAFT weights not found at text_detection/models/craft_mlt_25k.pth. Download manually from https://drive.google.com/uc?id=1Jk4eGD7crsqCCu9C9VepPZaq_XEnvsLn and place in text_detection/models/
+[FLASK] ... Loading Worker 6/8
+[FLASK] [+] Loaded NAFNet denoiser weights from denoising/models/nafnet-sidd-width32.pth
+[FLASK] [+] Loaded AlacGAN weights from networks/generator.zip
+[FLASK] [+] Downloading pretrained CRAFT weights...
+[FLASK] [-] Failed to initialize CRAFT: CRAFT weights not found at text_detection/models/craft_mlt_25k.pth. Download manually from https://drive.google.com/uc?id=1Jk4eGD7crsqCCu9C9VepPZaq_XEnvsLn and place in text_detection/models/
+[FLASK] [+] Loaded ESRGAN weights  from networks/RealESRGAN_x4plus_anime_6B.pt
+[FLASK] [+] Downloading pretrained CRAFT weights...
+[FLASK] [!] CRAFT init failed: CRAFT weights not found at text_detection/models/craft_mlt_25k.pth. Download manually from https://drive.google.com/uc?id=1Jk4eGD7crsqCCu9C9VepPZaq_XEnvsLn and place in text_detection/models/
+[FLASK] ... Loading Worker 7/8
+[FLASK] [+] Loaded NAFNet denoiser weights from denoising/models/nafnet-sidd-width32.pth
+[FLASK] [+] Loaded AlacGAN weights from networks/generator.zip
+[FLASK] [+] Downloading pretrained CRAFT weights...
+[FLASK] [-] Failed to initialize CRAFT: CRAFT weights not found at text_detection/models/craft_mlt_25k.pth. Download manually from https://drive.google.com/uc?id=1Jk4eGD7crsqCCu9C9VepPZaq_XEnvsLn and place in text_detection/models/
+[FLASK] [+] Loaded ESRGAN weights  from networks/RealESRGAN_x4plus_anime_6B.pt
+[FLASK] [+] Downloading pretrained CRAFT weights...
+[FLASK] [!] CRAFT init failed: CRAFT weights not found at text_detection/models/craft_mlt_25k.pth. Download manually from https://drive.google.com/uc?id=1Jk4eGD7crsqCCu9C9VepPZaq_XEnvsLn and place in text_detection/models/
+[FLASK] ... Loading Worker 8/8
+[FLASK] Traceback (most recent call last):
+[FLASK] File "/content/Manga-Colorizer/Backend/proxy_server.py", line 94, in <module>
+[FLASK] denoiser = MangaDenoiser(config)
+[FLASK] ^^^^^^^^^^^^^^^^^^^^^
+[FLASK] File "/content/Manga-Colorizer/Backend/denoisator.py", line 14, in __init__
+[FLASK] self.model = NAFNetDenoiser(self.device)
+[FLASK] ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[FLASK] File "/content/Manga-Colorizer/Backend/denoising/nafnet_denoiser.py", line 161, in __init__
+[FLASK] self.model = NAFNet(img_channel=3, width=32, middle_blk_num=12, enc_blk_nums=[2, 2, 4, 8], dec_blk_nums=[2, 2, 2, 2])
+[FLASK] ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[FLASK] File "/content/Manga-Colorizer/Backend/denoising/nafnet_denoiser.py", line 123, in __init__
+[FLASK] self.middle_blks = nn.Sequential(*[NAFBlock(chan) for _ in range(middle_blk_num)])
+[FLASK] ^^^^^^^^^^^^^^
+[FLASK] File "/content/Manga-Colorizer/Backend/denoising/nafnet_denoiser.py", line 80, in __init__
+[FLASK] self.conv4 = nn.Conv2d(in_channels=c, out_channels=ff_channel, kernel_size=1, padding=0, stride=1, groups=1, bias=True)
+[FLASK] ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[FLASK] File "/usr/local/lib/python3.12/dist-packages/torch/nn/modules/conv.py", line 519, in __init__
+[FLASK] super().__init__(
+[FLASK] File "/usr/local/lib/python3.12/dist-packages/torch/nn/modules/conv.py", line 180, in __init__
+[FLASK] self.reset_parameters()
+[FLASK] File "/usr/local/lib/python3.12/dist-packages/torch/nn/modules/conv.py", line 186, in reset_parameters
+[FLASK] init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+[FLASK] File "/usr/local/lib/python3.12/dist-packages/torch/nn/init.py", line 575, in kaiming_uniform_
+---------------------------------------------------------------------------
+KeyboardInterrupt                         Traceback (most recent call last)
+/tmp/ipykernel_23075/4199714541.py in <cell line: 0>()
+    303 wait_count = 0
+    304 while not flask_ready:
+--> 305     time.sleep(1)
+    306     wait_count += 1
+    307     if wait_count > 300: break
+
+KeyboardInterrupt: [FLASK] return tensor.uniform_(-bound, bound, generator=generator)
+[FLASK] ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[FLASK] KeyboardInterrupt

@@ -159,7 +159,8 @@ class Config:
 config = Config()
 
 # --- DYNAMIC WORKER POOL ---
-NUM_WORKERS = calculate_optimal_workers(vram_per_worker_gb=1.5, safety_margin_gb=2.0)
+NUM_WORKERS = min(6, calculate_optimal_workers(vram_per_worker_gb=1.5, safety_margin_gb=2.0))
+print(f"[+] Using {NUM_WORKERS} workers (capped at 6 for stability)", flush=True)
 model_queue = queue.Queue()
 
 try:
