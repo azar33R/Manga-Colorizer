@@ -159,7 +159,7 @@ class NAFNetDenoiser:
         if not os.path.exists(self.weights_path):
             os.makedirs(self.weights_dir, exist_ok=True)
             print(f"[+] Downloading pretrained NAFNet denoiser weights...")
-            url = 'https://github.com/megvii-research/NAFNet/releases/download/v0.0.1/nafnet-sidd-width32.pth'
+            url = 'https://github.com/megvii-research/NAFNet/releases/download/v0.0.1/NAFNet-SIDD-width32.pth'
             urlretrieve(url, self.weights_path)
             print(f"[+] NAFNet weights downloaded to {self.weights_path}")
         
