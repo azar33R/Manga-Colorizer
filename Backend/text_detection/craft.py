@@ -109,7 +109,8 @@ class CRAFT(nn.Module):
         new_state_dict = {}
         for k, v in state_dict.items():
             new_k = k.replace('module.', '')
-            new_state_dict[new_k] = v
+            # Force all floating point weights to float32 to prevent dtype mismatches
+            new_state_dict[new_k] = v.float() if v.is_floating_point() else v
         self.load_state_dict(new_state_dict, strict=False)
         print(f"[+] Loaded CRAFT weights")
         return True
@@ -164,7 +165,10 @@ class CraftTextDetector:
         # Preprocess
         img_resized = cv2.resize(image, (orig_w, orig_h))
         img_float = img_resized.astype(np.float32)
-        img_float = (img_float / 255.0 - [0.485, 0.456, 0.406]) / [0.229, 0.224, 0.225]
+        # Use float32 constants; Python float literals would promote to float64
+        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+        img_float = (img_float / 255.0 - mean) / std
 
         # Convert to tensor
         img_tensor = torch.from_numpy(img_float).permute(2, 0, 1).unsqueeze(0).to(self.device)

@@ -325,7 +325,9 @@ def proxy():
             return Response(r.content, status=200)
 
     except Exception as e:
+        import traceback
         print(f"[!] Processing Error: {e}", flush=True)
+        traceback.print_exc()
         return Response(r.content, status=200)
 
 if __name__ == '__main__':
