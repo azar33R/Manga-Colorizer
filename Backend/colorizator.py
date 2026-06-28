@@ -35,6 +35,7 @@ class AlacGANStrategy(ColorizationStrategy):
             state_dict = torch.load(path, map_location=self.device)
             if 'module' in list(state_dict.keys())[0]:
                 state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+            state_dict = {k: v.float() if v.is_floating_point() else v for k, v in state_dict.items()}
             self.model.generator.load_state_dict(state_dict)
             print(f"[+] Loaded AlacGAN weights from {path}")
         except Exception as e:
@@ -44,12 +45,13 @@ class AlacGANStrategy(ColorizationStrategy):
         target_size = size if size > 0 else self.params.image_size
         if target_size % 32 != 0: target_size = (target_size // 32) * 32
 
+        image = image.astype(np.float32)
         processed_img, pad = resize_pad(image, target_size)
         img_tensor = ToTensor()(processed_img).unsqueeze(0).float().to(self.device)
         hint = torch.zeros(1, 4, img_tensor.shape[2], img_tensor.shape[3]).float().to(self.device)
 
         with torch.no_grad():
-            model_input = torch.cat([img_tensor, hint], 1)
+            model_input = torch.cat([img_tensor, hint], 1).float()
 
             if self.params.tile_size > 0:
                 fake_color = tile_process(
@@ -85,6 +87,7 @@ class CycleGANStrategy(ColorizationStrategy):
                 sd = checkpoint
             else:
                 sd = checkpoint.state_dict()
+            sd = {k: v.float() if v.is_floating_point() else v for k, v in sd.items()}
             self.model.load_state_dict(sd, strict=True)
             print(f"[+] Loaded CycleGAN weights from {path}")
         except Exception as e:
@@ -94,8 +97,9 @@ class CycleGANStrategy(ColorizationStrategy):
         target_size = size if size > 0 else self.params.image_size
         if target_size % 4 != 0: target_size = (target_size // 4) * 4
 
+        image = image.astype(np.float32)
         processed_img, pad = resize_pad(image, target_size)
-        img_tensor = ToTensor()(processed_img).unsqueeze(0).float().to(self.device)
+        img_tensor = ToTensor()(processed_img).unsqueeze(0).float().to(self.device).float()
         img_tensor = (img_tensor - 0.5) / 0.5
 
         if img_tensor.shape[1] == 1:
@@ -104,11 +108,11 @@ class CycleGANStrategy(ColorizationStrategy):
         with torch.no_grad():
             if self.params.tile_size > 0:
                 fake_color = tile_process(
-                    self.model, img_tensor, 1,
+                    self.model, img_tensor.float(), 1,
                     self.params.tile_size, self.params.tile_pad
                 )
             else:
-                fake_color = self.model(img_tensor)
+                fake_color = self.model(img_tensor.float())
 
             result = fake_color[0].detach().permute(1, 2, 0) * 0.5 + 0.5
             if pad[0] != 0: result = result[:-pad[0]]
