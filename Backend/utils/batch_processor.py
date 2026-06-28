@@ -32,6 +32,8 @@ def create_batch(images, device='cuda'):
     
     if batch.dtype == np.uint8:
         batch = batch.astype(np.float32) / 255.0
+    elif batch.dtype != np.float32:
+        batch = batch.astype(np.float32)
     
     batch_tensor = torch.from_numpy(batch).permute(0, 3, 1, 2).to(device)
     

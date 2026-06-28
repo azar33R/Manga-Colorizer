@@ -40,10 +40,12 @@ class FFDNetDenoiser:
         weights_path = os.path.join(self.weights_dir, weights_name)
         if self.device == 'cuda':
             state_dict = torch.load(weights_path, map_location=torch.device('cpu'))
+            state_dict = {k: v.float() if v.is_floating_point() else v for k, v in state_dict.items()}
             device_ids = [0]
             self.model = nn.DataParallel(self.model, device_ids=device_ids).cuda()
         else:
             state_dict = torch.load(weights_path, map_location='cpu')
+            state_dict = {k: v.float() if v.is_floating_point() else v for k, v in state_dict.items()}
             # CPU mode: remove the DataParallel wrapper
             state_dict = remove_dataparallel_wrapper(state_dict)
         self.model.load_state_dict(state_dict)
@@ -83,7 +85,7 @@ class FFDNetDenoiser:
             imorig = np.concatenate((imorig, imorig[:, :, :, -1][:, :, :, np.newaxis]), axis=3)
 
 
-        imorig = torch.Tensor(imorig)
+        imorig = torch.tensor(imorig, dtype=torch.float32)
 
 
         # Sets data type according to CPU or GPU modes

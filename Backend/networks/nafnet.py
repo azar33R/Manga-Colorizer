@@ -5,7 +5,6 @@ import torch.nn.functional as F
 class LayerNormFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, weight, bias, eps):
-        prev_type = x.dtype
         x = x.float()
         weight = weight.float()
         bias = bias.float()
@@ -14,7 +13,7 @@ class LayerNormFunction(torch.autograd.Function):
         ctx.save_for_backward(x, weight, bias, mu, sigma)
         ctx.eps = eps
         x = (x - mu) / (sigma + eps).sqrt()
-        res = (x * weight + bias).to(prev_type)
+        res = x * weight + bias
         return res
 
     @staticmethod

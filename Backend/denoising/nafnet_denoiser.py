@@ -15,7 +15,6 @@ except ImportError:
 class LayerNormFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, weight, bias, eps):
-        prev_type = x.dtype
         x = x.float()
         weight = weight.float()
         bias = bias.float()
@@ -24,7 +23,7 @@ class LayerNormFunction(torch.autograd.Function):
         ctx.save_for_backward(x, weight, bias, mu, sigma)
         ctx.eps = eps
         x = (x - mu) / (sigma + eps).sqrt()
-        res = (x * weight + bias).to(prev_type)
+        res = x * weight + bias
         return res
 
     @staticmethod
@@ -181,10 +180,11 @@ class NAFNetDenoiser:
         new_state_dict = {}
         for k, v in state_dict.items():
             new_k = k.replace('module.', '')
-            new_state_dict[new_k] = v
+            # Force all floating point weights to float32 to prevent dtype mismatches
+            new_state_dict[new_k] = v.float() if v.is_floating_point() else v
         
         self.model.load_state_dict(new_state_dict, strict=True)
-        self.model = self.model.to(self.device)
+        self.model = self.model.float().to(self.device)
         print(f"[+] Loaded NAFNet denoiser weights from {self.weights_path}")
 
     def get_denoised_image(self, imorig, sigma=None):
@@ -201,7 +201,7 @@ class NAFNetDenoiser:
         imorig_tensor = torch.from_numpy(imorig_float).permute(2, 0, 1).unsqueeze(0).to(self.device)
         
         with torch.no_grad():
-            outim = self.model(imorig_tensor)
+            outim = self.model(imorig_tensor.float())
         
         outim = outim.squeeze(0).permute(1, 2, 0).cpu().numpy()
         outim = np.clip(outim, 0, 1)

@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import torch.nn as nn
 
 from networks.RRDBNet import Upscaler as ESRGANNet
 from networks.aura_sr import Upscaler as GigaGANNet, upscale_4x, upscale_4x_overlapped
@@ -27,6 +28,11 @@ class ESRGANStrategy(UpscalingStrategy):
     def load_weights(self, path):
         try:
             model_or_chkpt = torch.load(path, map_location=self.device, weights_only=False)
+            # Force all floating point weights to float32 to prevent dtype mismatches
+            if isinstance(model_or_chkpt, nn.Module):
+                model_or_chkpt = model_or_chkpt.float()
+            elif isinstance(model_or_chkpt, dict):
+                model_or_chkpt = {k: v.float() if v.is_floating_point() else v for k, v in model_or_chkpt.items()}
             self.model.generator = model_or_chkpt
             print(f"[+] Loaded ESRGAN weights  from {path}")
         except Exception as e:
@@ -71,8 +77,12 @@ class GigaGANStrategy(UpscalingStrategy):
             if 'state_dict' in checkpoint:
                 sd = checkpoint['state_dict']
                 new_sd = {k.replace('model.', '').replace('generator.', ''): v for k, v in sd.items()}
+                # Force all floating point weights to float32 to prevent dtype mismatches
+                new_sd = {k: v.float() if v.is_floating_point() else v for k, v in new_sd.items()}
                 self.model.generator.load_state_dict(new_sd, strict=False)
             else:
+                # Force all floating point weights to float32 to prevent dtype mismatches
+                checkpoint = {k: v.float() if v.is_floating_point() else v for k, v in checkpoint.items()}
                 self.model.generator.load_state_dict(checkpoint, strict=False)
             print(f"[+] GigaGAN weights loaded from {path}")
         except Exception as e:
