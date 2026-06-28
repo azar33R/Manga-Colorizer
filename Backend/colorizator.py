@@ -45,7 +45,7 @@ class AlacGANStrategy(ColorizationStrategy):
         if target_size % 32 != 0: target_size = (target_size // 32) * 32
 
         processed_img, pad = resize_pad(image, target_size)
-        img_tensor = ToTensor()(processed_img).unsqueeze(0).to(self.device)
+        img_tensor = ToTensor()(processed_img).unsqueeze(0).float().to(self.device)
         hint = torch.zeros(1, 4, img_tensor.shape[2], img_tensor.shape[3]).float().to(self.device)
 
         with torch.no_grad():
@@ -95,7 +95,7 @@ class CycleGANStrategy(ColorizationStrategy):
         if target_size % 4 != 0: target_size = (target_size // 4) * 4
 
         processed_img, pad = resize_pad(image, target_size)
-        img_tensor = ToTensor()(processed_img).unsqueeze(0).to(self.device)
+        img_tensor = ToTensor()(processed_img).unsqueeze(0).float().to(self.device)
         img_tensor = (img_tensor - 0.5) / 0.5
 
         if img_tensor.shape[1] == 1:

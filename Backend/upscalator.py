@@ -33,8 +33,8 @@ class ESRGANStrategy(UpscalingStrategy):
             print(f"[-] Failed to load ESRGAN weights: {e}")
 
     def upscale(self, image, factor):
-        img_tensor = torch.from_numpy(image).to(self.device)
-        result = img_tensor.permute(2, 0, 1).unsqueeze(0).float()
+        img_tensor = torch.from_numpy(image).float().to(self.device)
+        result = img_tensor.permute(2, 0, 1).unsqueeze(0)
 
         with torch.no_grad():
             if self.params.tile_size > 0:

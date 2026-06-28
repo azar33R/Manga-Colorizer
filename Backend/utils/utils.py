@@ -49,7 +49,8 @@ def resize_pad(img, size = 256):
         
         img = np.pad(img, ((0, pad[0]), (0, 0), (0, 0)), 'maximum')
         
-    if (img.dtype == 'float32'):
+    if np.issubdtype(img.dtype, np.floating):
+        img = img.astype(np.float32)
         np.clip(img, 0, 1, out = img)
 
     return img[:, :, :1], pad
